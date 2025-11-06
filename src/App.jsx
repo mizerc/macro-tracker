@@ -8,6 +8,9 @@ function App() {
   // Ref for click outside detection
   const quickLogSearchRef = useRef(null)
   
+  // Track if initial load is complete
+  const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false)
+  
   // Food Database
   const [savedFoods, setSavedFoods] = useState([])
   
@@ -98,28 +101,41 @@ function App() {
       setDailyGoal(goals.calories)
       setGoalInput(goals.calories)
     }
+    
+    // Mark initial load as complete
+    setIsInitialLoadComplete(true)
   }, [])
 
-  // Save to localStorage whenever data changes
+  // Save to localStorage whenever data changes (after initial load)
   useEffect(() => {
-    localStorage.setItem('savedFoods', JSON.stringify(savedFoods))
-  }, [savedFoods])
+    if (isInitialLoadComplete) {
+      localStorage.setItem('savedFoods', JSON.stringify(savedFoods))
+    }
+  }, [savedFoods, isInitialLoadComplete])
 
   useEffect(() => {
-    localStorage.setItem('savedMeals', JSON.stringify(savedMeals))
-  }, [savedMeals])
+    if (isInitialLoadComplete) {
+      localStorage.setItem('savedMeals', JSON.stringify(savedMeals))
+    }
+  }, [savedMeals, isInitialLoadComplete])
 
   useEffect(() => {
-    localStorage.setItem('logEntries', JSON.stringify(logEntries))
-  }, [logEntries])
+    if (isInitialLoadComplete) {
+      localStorage.setItem('logEntries', JSON.stringify(logEntries))
+    }
+  }, [logEntries, isInitialLoadComplete])
 
   useEffect(() => {
-    localStorage.setItem('dailyGoal', dailyGoal.toString())
-  }, [dailyGoal])
+    if (isInitialLoadComplete) {
+      localStorage.setItem('dailyGoal', dailyGoal.toString())
+    }
+  }, [dailyGoal, isInitialLoadComplete])
 
   useEffect(() => {
-    localStorage.setItem('macroGoals', JSON.stringify(macroGoals))
-  }, [macroGoals])
+    if (isInitialLoadComplete) {
+      localStorage.setItem('macroGoals', JSON.stringify(macroGoals))
+    }
+  }, [macroGoals, isInitialLoadComplete])
 
   // Handle click outside to close suggestions
   useEffect(() => {
