@@ -635,7 +635,7 @@ function App() {
             </div>
 
             {/* Quick Add with Date */}
-            <div className="section" style={{ maxWidth: '700px', margin: '0 auto 30px' }}>
+            <div className="section" style={{ margin: '0 auto 30px' }}>
               <h2>Quick Add</h2>
               <form onSubmit={handleQuickLog}>
                 <div className="form-row">
@@ -720,7 +720,7 @@ function App() {
             </div>
 
             {/* Food Log by Date */}
-            <div className="section" style={{ maxWidth: '1000px', margin: '0 auto' }}>
+            <div className="section" style={{ margin: '0 auto' }}>
               <h2>Food Log</h2>
               {logEntries.length === 0 ? (
                 <div className="empty-state">
