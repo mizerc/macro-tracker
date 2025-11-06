@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, Target, TrendingUp, Flame, Coffee, UtensilsCrossed, BookOpen, Edit, Search, Loader, ClipboardList } from 'lucide-react'
+import { Plus, Trash2, Target, TrendingUp, Flame, Coffee, UtensilsCrossed, BookOpen, Edit, Search, Loader, ClipboardList, Settings, Download, Upload } from 'lucide-react'
 
 function App() {
   // Navigation
@@ -389,6 +389,78 @@ function App() {
     return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
   }
 
+  // Import/Export Handlers
+  const handleExportData = () => {
+    const exportData = {
+      version: '1.0',
+      exportDate: new Date().toISOString(),
+      data: {
+        savedFoods,
+        savedMeals,
+        logEntries,
+        macroGoals,
+        dailyGoal
+      }
+    }
+
+    const dataStr = JSON.stringify(exportData, null, 2)
+    const dataBlob = new Blob([dataStr], { type: 'application/json' })
+    const url = URL.createObjectURL(dataBlob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `macro-tracker-backup-${new Date().toISOString().split('T')[0]}.json`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  const handleImportData = (event) => {
+    const file = event.target.files[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const importedData = JSON.parse(e.target.result)
+        
+        // Validate the data structure
+        if (!importedData.data) {
+          alert('Invalid backup file format')
+          return
+        }
+
+        const { savedFoods: importedFoods, savedMeals: importedMeals, logEntries: importedLogs, macroGoals: importedGoals, dailyGoal: importedDailyGoal } = importedData.data
+
+        // Confirm before importing
+        const confirmMessage = `This will import:\n- ${importedFoods?.length || 0} foods\n- ${importedMeals?.length || 0} meals\n- ${importedLogs?.length || 0} log entries\n- Macro goals\n\nThis will replace your current data. Continue?`
+        
+        if (confirm(confirmMessage)) {
+          if (importedFoods) setSavedFoods(importedFoods)
+          if (importedMeals) setSavedMeals(importedMeals)
+          if (importedLogs) setLogEntries(importedLogs)
+          if (importedGoals) {
+            setMacroGoals(importedGoals)
+            setMacroGoalsInput(importedGoals)
+          }
+          if (importedDailyGoal) {
+            setDailyGoal(importedDailyGoal)
+            setGoalInput(importedDailyGoal)
+          }
+          
+          alert('Data imported successfully!')
+        }
+      } catch (error) {
+        console.error('Import error:', error)
+        alert('Failed to import data. Please check the file format.')
+      }
+    }
+    reader.readAsText(file)
+    
+    // Reset the input so the same file can be imported again if needed
+    event.target.value = ''
+  }
+
   return (
     <div className="app">
       <div className="header">
@@ -424,6 +496,13 @@ function App() {
           >
             <UtensilsCrossed size={20} />
             Meals
+          </button>
+          <button 
+            className={`tab-btn ${activeTab === 'settings' ? 'active' : ''}`}
+            onClick={() => setActiveTab('settings')}
+          >
+            <Settings size={20} />
+            Settings
           </button>
         </div>
       </div>
@@ -1262,6 +1341,119 @@ function App() {
                     </div>
                   ))
                 )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SETTINGS TAB */}
+        {activeTab === 'settings' && (
+          <div className="settings-container">
+            <div className="planner-intro">
+              <h2>Settings</h2>
+              <p>Manage your data with import and export options</p>
+            </div>
+
+            <div className="settings-grid">
+              {/* Data Overview */}
+              <div className="section">
+                <h3>Data Overview</h3>
+                <div className="data-stats">
+                  <div className="data-stat-item">
+                    <div className="data-stat-icon">
+                      <Coffee size={32} />
+                    </div>
+                    <div className="data-stat-info">
+                      <span className="data-stat-value">{savedFoods.length}</span>
+                      <span className="data-stat-label">Saved Foods</span>
+                    </div>
+                  </div>
+
+                  <div className="data-stat-item">
+                    <div className="data-stat-icon">
+                      <UtensilsCrossed size={32} />
+                    </div>
+                    <div className="data-stat-info">
+                      <span className="data-stat-value">{savedMeals.length}</span>
+                      <span className="data-stat-label">Saved Meals</span>
+                    </div>
+                  </div>
+
+                  <div className="data-stat-item">
+                    <div className="data-stat-icon">
+                      <Flame size={32} />
+                    </div>
+                    <div className="data-stat-info">
+                      <span className="data-stat-value">{logEntries.length}</span>
+                      <span className="data-stat-label">Log Entries</span>
+                    </div>
+                  </div>
+
+                  <div className="data-stat-item">
+                    <div className="data-stat-icon">
+                      <Target size={32} />
+                    </div>
+                    <div className="data-stat-info">
+                      <span className="data-stat-value">{macroGoals.calories}</span>
+                      <span className="data-stat-label">Daily Goal (kcal)</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Import/Export Section */}
+              <div className="section">
+                <h3>Backup & Restore</h3>
+                <p style={{ color: '#666', marginBottom: '20px', fontSize: '0.95rem' }}>
+                  Export your data to create a backup, or import a previously saved backup to restore your data.
+                </p>
+
+                <div className="import-export-actions">
+                  <div className="action-card">
+                    <div className="action-icon export">
+                      <Download size={32} />
+                    </div>
+                    <h4>Export Data</h4>
+                    <p>Download all your foods, meals, log entries, and goals as a JSON file.</p>
+                    <button 
+                      className="btn btn-primary"
+                      onClick={handleExportData}
+                      style={{ width: '100%', marginTop: '15px' }}
+                    >
+                      <Download size={20} />
+                      Export to JSON
+                    </button>
+                  </div>
+
+                  <div className="action-card">
+                    <div className="action-icon import">
+                      <Upload size={32} />
+                    </div>
+                    <h4>Import Data</h4>
+                    <p>Restore your data from a previously exported JSON file. This will replace current data.</p>
+                    <label className="btn btn-secondary" style={{ width: '100%', marginTop: '15px', cursor: 'pointer' }}>
+                      <Upload size={20} />
+                      Import from JSON
+                      <input 
+                        type="file" 
+                        accept=".json"
+                        onChange={handleImportData}
+                        style={{ display: 'none' }}
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* Info Box */}
+                <div className="info-box" style={{ marginTop: '25px' }}>
+                  <h4>💡 Backup Tips</h4>
+                  <ul style={{ marginTop: '10px', paddingLeft: '20px', lineHeight: '1.8' }}>
+                    <li>Export your data regularly to prevent data loss</li>
+                    <li>Keep backup files in a safe location (cloud storage, external drive)</li>
+                    <li>Importing will replace all current data - make sure to export first if needed</li>
+                    <li>You can transfer data between devices using export/import</li>
+                  </ul>
+                </div>
               </div>
             </div>
           </div>
