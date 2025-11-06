@@ -1,9 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Plus, Trash2, Target, TrendingUp, Flame, Coffee, UtensilsCrossed, BookOpen, Edit, Search, Loader, ClipboardList, Settings, Download, Upload } from 'lucide-react'
 
 function App() {
   // Navigation
   const [activeTab, setActiveTab] = useState('tracker')
+  
+  // Ref for click outside detection
+  const quickLogSearchRef = useRef(null)
   
   // Food Database
   const [savedFoods, setSavedFoods] = useState([])
@@ -60,7 +63,9 @@ function App() {
   const [quickLogForm, setQuickLogForm] = useState({
     selectedItem: null,
     itemType: '', // 'food' or 'meal'
-    date: new Date().toISOString().split('T')[0] // Default to today
+    date: new Date().toISOString().split('T')[0], // Default to today
+    searchQuery: '',
+    showSuggestions: false
   })
 
   // Load data from localStorage on mount
@@ -115,6 +120,20 @@ function App() {
   useEffect(() => {
     localStorage.setItem('macroGoals', JSON.stringify(macroGoals))
   }, [macroGoals])
+
+  // Handle click outside to close suggestions
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (quickLogSearchRef.current && !quickLogSearchRef.current.contains(event.target)) {
+        setQuickLogForm(prev => ({ ...prev, showSuggestions: false }))
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [])
 
   // USDA API Search Handlers
   const searchUsdaFoods = async () => {
@@ -282,25 +301,44 @@ function App() {
   }
 
   // Tracker Handlers
-  const handleQuickLogSelect = (e) => {
-    const value = e.target.value
-    if (!value) {
-      setQuickLogForm(prev => ({ ...prev, selectedItem: null, itemType: '' }))
-      return
-    }
+  const handleQuickLogSearchChange = (e) => {
+    const query = e.target.value
+    setQuickLogForm(prev => ({ 
+      ...prev, 
+      searchQuery: query,
+      showSuggestions: query.length > 0,
+      selectedItem: null,
+      itemType: ''
+    }))
+  }
 
-    const [type, id] = value.split('-')
-    if (type === 'food') {
-      const food = savedFoods.find(f => f.id === parseInt(id))
-      setQuickLogForm(prev => ({ ...prev, selectedItem: food, itemType: 'food' }))
-    } else if (type === 'meal') {
-      const meal = savedMeals.find(m => m.id === parseInt(id))
-      setQuickLogForm(prev => ({ ...prev, selectedItem: meal, itemType: 'meal' }))
-    }
+  const handleSelectSuggestion = (item, type) => {
+    setQuickLogForm(prev => ({ 
+      ...prev, 
+      selectedItem: item,
+      itemType: type,
+      searchQuery: item.name,
+      showSuggestions: false
+    }))
   }
 
   const handleQuickLogDateChange = (e) => {
     setQuickLogForm(prev => ({ ...prev, date: e.target.value }))
+  }
+
+  // Filter foods and meals based on search query
+  const getFilteredSuggestions = () => {
+    const query = quickLogForm.searchQuery.toLowerCase()
+    if (!query) return { foods: [], meals: [] }
+
+    const filteredFoods = savedFoods.filter(food => 
+      food.name.toLowerCase().includes(query)
+    )
+    const filteredMeals = savedMeals.filter(meal => 
+      meal.name.toLowerCase().includes(query)
+    )
+
+    return { foods: filteredFoods, meals: filteredMeals }
   }
 
   const handleQuickLog = (e) => {
@@ -333,7 +371,9 @@ function App() {
     setQuickLogForm({ 
       selectedItem: null,
       itemType: '',
-      date: new Date().toISOString().split('T')[0] // Reset to today
+      date: new Date().toISOString().split('T')[0], // Reset to today
+      searchQuery: '',
+      showSuggestions: false
     })
   }
 
@@ -639,34 +679,72 @@ function App() {
               <h2>Quick Add</h2>
               <form onSubmit={handleQuickLog}>
                 <div className="form-row">
-                  <div className="form-group" style={{ flex: '2' }}>
-                    <label>Select Food or Meal *</label>
-                    <select 
-                      className="food-select"
-                      onChange={handleQuickLogSelect}
-                      value={quickLogForm.selectedItem ? `${quickLogForm.itemType}-${quickLogForm.selectedItem.id}` : ''}
-                      required
-                    >
-                      <option value="">Choose a food or meal...</option>
-                      {savedFoods.length > 0 && (
-                        <optgroup label="Foods">
-                          {savedFoods.map(food => (
-                            <option key={`food-${food.id}`} value={`food-${food.id}`}>
-                              {food.name} ({food.calories} kcal)
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
-                      {savedMeals.length > 0 && (
-                        <optgroup label="Meals">
-                          {savedMeals.map(meal => (
-                            <option key={`meal-${meal.id}`} value={`meal-${meal.id}`}>
-                              {meal.name} ({meal.calories} kcal)
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
-                    </select>
+                  <div className="form-group" style={{ flex: '2', position: 'relative' }} ref={quickLogSearchRef}>
+                    <label>Search Food or Meal *</label>
+                    <input
+                      type="text"
+                      value={quickLogForm.searchQuery}
+                      onChange={handleQuickLogSearchChange}
+                      placeholder="Start typing to search..."
+                      autoComplete="off"
+                    />
+                    
+                    {/* Suggestions Dropdown */}
+                    {quickLogForm.showSuggestions && (
+                      <div className="suggestions-dropdown">
+                        {(() => {
+                          const { foods, meals } = getFilteredSuggestions()
+                          const hasResults = foods.length > 0 || meals.length > 0
+
+                          if (!hasResults) {
+                            return (
+                              <div className="suggestion-empty">
+                                No foods or meals found
+                              </div>
+                            )
+                          }
+
+                          return (
+                            <>
+                              {foods.length > 0 && (
+                                <div className="suggestion-group">
+                                  <div className="suggestion-group-label">Foods</div>
+                                  {foods.map(food => (
+                                    <div
+                                      key={`food-${food.id}`}
+                                      className="suggestion-item"
+                                      onClick={() => handleSelectSuggestion(food, 'food')}
+                                    >
+                                      <span className="suggestion-name">{food.name}</span>
+                                      <span className="suggestion-calories">{food.calories} kcal</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              
+                              {meals.length > 0 && (
+                                <div className="suggestion-group">
+                                  <div className="suggestion-group-label">Meals</div>
+                                  {meals.map(meal => (
+                                    <div
+                                      key={`meal-${meal.id}`}
+                                      className="suggestion-item"
+                                      onClick={() => handleSelectSuggestion(meal, 'meal')}
+                                    >
+                                      <span className="suggestion-name">
+                                        {meal.name}
+                                        <span className="badge-meal-small" style={{ marginLeft: '8px' }}>Meal</span>
+                                      </span>
+                                      <span className="suggestion-calories">{meal.calories} kcal</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </>
+                          )
+                        })()}
+                      </div>
+                    )}
                   </div>
 
                   <div className="form-group" style={{ flex: '1' }}>
