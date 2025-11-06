@@ -58,12 +58,9 @@ function App() {
   })
   
   const [quickLogForm, setQuickLogForm] = useState({
-    name: '',
-    calories: '',
-    protein: '',
-    carbs: '',
-    fat: '',
-    fiber: ''
+    selectedItem: null,
+    itemType: '', // 'food' or 'meal'
+    date: new Date().toISOString().split('T')[0] // Default to today
   })
 
   // Load data from localStorage on mount
@@ -285,32 +282,59 @@ function App() {
   }
 
   // Tracker Handlers
-  const handleQuickLogChange = (e) => {
-    const { name, value } = e.target
-    setQuickLogForm(prev => ({ ...prev, [name]: value }))
+  const handleQuickLogSelect = (e) => {
+    const value = e.target.value
+    if (!value) {
+      setQuickLogForm(prev => ({ ...prev, selectedItem: null, itemType: '' }))
+      return
+    }
+
+    const [type, id] = value.split('-')
+    if (type === 'food') {
+      const food = savedFoods.find(f => f.id === parseInt(id))
+      setQuickLogForm(prev => ({ ...prev, selectedItem: food, itemType: 'food' }))
+    } else if (type === 'meal') {
+      const meal = savedMeals.find(m => m.id === parseInt(id))
+      setQuickLogForm(prev => ({ ...prev, selectedItem: meal, itemType: 'meal' }))
+    }
+  }
+
+  const handleQuickLogDateChange = (e) => {
+    setQuickLogForm(prev => ({ ...prev, date: e.target.value }))
   }
 
   const handleQuickLog = (e) => {
     e.preventDefault()
-    if (!quickLogForm.name || !quickLogForm.calories) {
-      alert('Please enter at least food name and calories')
+    if (!quickLogForm.selectedItem) {
+      alert('Please select a food or meal')
       return
     }
 
+    // Use the selected date but with current time
+    const selectedDate = new Date(quickLogForm.date + 'T' + new Date().toTimeString().split(' ')[0])
+
     const newEntry = {
       id: Date.now(),
-      type: 'quick',
-      name: quickLogForm.name,
-      calories: parseInt(quickLogForm.calories) || 0,
-      protein: parseInt(quickLogForm.protein) || 0,
-      carbs: parseInt(quickLogForm.carbs) || 0,
-      fat: parseInt(quickLogForm.fat) || 0,
-      fiber: parseInt(quickLogForm.fiber) || 0,
-      timestamp: new Date().toISOString()
+      type: quickLogForm.itemType,
+      name: quickLogForm.selectedItem.name,
+      calories: quickLogForm.selectedItem.calories,
+      protein: quickLogForm.selectedItem.protein,
+      carbs: quickLogForm.selectedItem.carbs,
+      fat: quickLogForm.selectedItem.fat,
+      fiber: quickLogForm.selectedItem.fiber || 0,
+      timestamp: selectedDate.toISOString()
+    }
+
+    if (quickLogForm.itemType === 'meal') {
+      newEntry.foods = quickLogForm.selectedItem.foods
     }
 
     setLogEntries(prev => [newEntry, ...prev])
-    setQuickLogForm({ name: '', calories: '', protein: '', carbs: '', fat: '', fiber: '' })
+    setQuickLogForm({ 
+      selectedItem: null,
+      itemType: '',
+      date: new Date().toISOString().split('T')[0] // Reset to today
+    })
   }
 
   const handleLogSavedFood = (food) => {
@@ -387,6 +411,49 @@ function App() {
   const formatTime = (timestamp) => {
     const date = new Date(timestamp)
     return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+  }
+
+  const formatDate = (timestamp) => {
+    const date = new Date(timestamp)
+    const today = new Date()
+    const yesterday = new Date(today)
+    yesterday.setDate(yesterday.getDate() - 1)
+
+    // Check if it's today
+    if (date.toDateString() === today.toDateString()) {
+      return 'Today'
+    }
+    // Check if it's yesterday
+    if (date.toDateString() === yesterday.toDateString()) {
+      return 'Yesterday'
+    }
+    // Otherwise return formatted date
+    return date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })
+  }
+
+  // Group log entries by date
+  const groupEntriesByDate = () => {
+    const grouped = {}
+    logEntries.forEach(entry => {
+      const dateKey = new Date(entry.timestamp).toDateString()
+      if (!grouped[dateKey]) {
+        grouped[dateKey] = {
+          entries: [],
+          totals: { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 }
+        }
+      }
+      grouped[dateKey].entries.push(entry)
+      grouped[dateKey].totals.calories += entry.calories
+      grouped[dateKey].totals.protein += entry.protein
+      grouped[dateKey].totals.carbs += entry.carbs
+      grouped[dateKey].totals.fat += entry.fat
+      grouped[dateKey].totals.fiber += entry.fiber || 0
+    })
+    
+    // Sort by date (most recent first)
+    return Object.entries(grouped).sort((a, b) => {
+      return new Date(b[0]) - new Date(a[0])
+    })
   }
 
   // Import/Export Handlers
@@ -567,179 +634,160 @@ function App() {
           </div>
             </div>
 
-            {/* Daily Goal Setting */}
-            <div className="section" style={{ marginBottom: '30px' }}>
-              <div className="goal-input-group">
-                <div className="form-group">
-                  <label><Target size={16} style={{ display: 'inline', marginRight: '5px' }} />Daily Goal (kcal)</label>
-                  <input
-                    type="number"
-                    value={goalInput}
-                    onChange={(e) => setGoalInput(parseInt(e.target.value) || 0)}
-                    min="0"
-                  />
+            {/* Quick Add with Date */}
+            <div className="section" style={{ maxWidth: '700px', margin: '0 auto 30px' }}>
+              <h2>Quick Add</h2>
+              <form onSubmit={handleQuickLog}>
+                <div className="form-row">
+                  <div className="form-group" style={{ flex: '2' }}>
+                    <label>Select Food or Meal *</label>
+                    <select 
+                      className="food-select"
+                      onChange={handleQuickLogSelect}
+                      value={quickLogForm.selectedItem ? `${quickLogForm.itemType}-${quickLogForm.selectedItem.id}` : ''}
+                      required
+                    >
+                      <option value="">Choose a food or meal...</option>
+                      {savedFoods.length > 0 && (
+                        <optgroup label="Foods">
+                          {savedFoods.map(food => (
+                            <option key={`food-${food.id}`} value={`food-${food.id}`}>
+                              {food.name} ({food.calories} kcal)
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {savedMeals.length > 0 && (
+                        <optgroup label="Meals">
+                          {savedMeals.map(meal => (
+                            <option key={`meal-${meal.id}`} value={`meal-${meal.id}`}>
+                              {meal.name} ({meal.calories} kcal)
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                  </div>
+
+                  <div className="form-group" style={{ flex: '1' }}>
+                    <label>Date *</label>
+                    <input
+                      type="date"
+                      name="date"
+                      value={quickLogForm.date}
+                      onChange={handleQuickLogDateChange}
+                      required
+                    />
+                  </div>
                 </div>
-                <button className="btn btn-primary" onClick={handleSetGoal} style={{ width: 'auto' }}>
-                  Set Goal
+
+                {/* Preview selected item */}
+                {quickLogForm.selectedItem && (
+                  <div className="selected-item-preview">
+                    <h4>{quickLogForm.selectedItem.name}</h4>
+                    <div className="preview-macros">
+                      <span className="preview-macro"><strong>{quickLogForm.selectedItem.calories}</strong> kcal</span>
+                      <span className="preview-macro">P: {quickLogForm.selectedItem.protein}g</span>
+                      <span className="preview-macro">C: {quickLogForm.selectedItem.carbs}g</span>
+                      <span className="preview-macro">F: {quickLogForm.selectedItem.fat}g</span>
+                      {quickLogForm.selectedItem.fiber > 0 && (
+                        <span className="preview-macro">Fiber: {quickLogForm.selectedItem.fiber}g</span>
+                      )}
+                    </div>
+                    {quickLogForm.itemType === 'meal' && quickLogForm.selectedItem.foods && (
+                      <div className="preview-meal-items">
+                        <small>Includes: {quickLogForm.selectedItem.foods.map(f => `${f.name} (${f.quantity}x)`).join(', ')}</small>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <button 
+                  type="submit" 
+                  className="btn btn-primary"
+                  disabled={!quickLogForm.selectedItem}
+                >
+                  <Plus size={20} />
+                  Add to Log
                 </button>
-              </div>
+
+                {savedFoods.length === 0 && savedMeals.length === 0 && (
+                  <p style={{ marginTop: '15px', color: '#999', fontSize: '0.9rem', textAlign: 'center' }}>
+                    No saved foods or meals yet. Create some in the Foods or Meals tabs first.
+                  </p>
+                )}
+              </form>
             </div>
 
-            {/* Content Grid */}
-            <div className="content-grid">
-              {/* Quick Log Form */}
-              <div className="section">
-                <h2>Quick Add</h2>
-                <form onSubmit={handleQuickLog}>
-                  <div className="form-group">
-                    <label>Food Name *</label>
-                    <input
-                      type="text"
-                      name="name"
-                      value={quickLogForm.name}
-                      onChange={handleQuickLogChange}
-                      placeholder="e.g., Chicken breast"
-                      required
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label>Calories (kcal) *</label>
-                    <input
-                      type="number"
-                      name="calories"
-                      value={quickLogForm.calories}
-                      onChange={handleQuickLogChange}
-                      placeholder="e.g., 165"
-                      min="0"
-                      required
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label>Protein (g)</label>
-                    <input
-                      type="number"
-                      name="protein"
-                      value={quickLogForm.protein}
-                      onChange={handleQuickLogChange}
-                      placeholder="e.g., 31"
-                      min="0"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label>Carbs (g)</label>
-                    <input
-                      type="number"
-                      name="carbs"
-                      value={quickLogForm.carbs}
-                      onChange={handleQuickLogChange}
-                      placeholder="e.g., 0"
-                      min="0"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label>Fat (g)</label>
-                    <input
-                      type="number"
-                      name="fat"
-                      value={quickLogForm.fat}
-                      onChange={handleQuickLogChange}
-                      placeholder="e.g., 3.6"
-                      min="0"
-                    />
-                  </div>
-
-                  <button type="submit" className="btn btn-primary">
-                    <Plus size={20} />
-                    Quick Add
-                  </button>
-                </form>
-
-                {/* Saved Foods Quick Access */}
-                <div style={{ marginTop: '30px' }}>
-                  <h3 style={{ fontSize: '1.2rem', marginBottom: '15px', color: '#333' }}>From Saved Foods</h3>
-                  {savedFoods.length === 0 ? (
-                    <p style={{ color: '#999', fontSize: '0.9rem' }}>No saved foods yet. Create some in the Foods tab!</p>
-                  ) : (
-                    <div className="quick-add-list">
-                      {savedFoods.slice(0, 5).map(food => (
-                        <button
-                          key={food.id}
-                          className="quick-add-btn"
-                          onClick={() => handleLogSavedFood(food)}
-                        >
-                          <Plus size={16} />
-                          {food.name} ({food.calories} kcal)
-                        </button>
-                      ))}
-                    </div>
-                  )}
+            {/* Food Log by Date */}
+            <div className="section" style={{ maxWidth: '1000px', margin: '0 auto' }}>
+              <h2>Food Log</h2>
+              {logEntries.length === 0 ? (
+                <div className="empty-state">
+                  <Flame size={48} />
+                  <p>No entries yet.</p>
+                  <p style={{ fontSize: '0.9rem', marginTop: '10px' }}>Start tracking your meals!</p>
                 </div>
-
-                {/* Saved Meals Quick Access */}
-                <div style={{ marginTop: '20px' }}>
-                  <h3 style={{ fontSize: '1.2rem', marginBottom: '15px', color: '#333' }}>From Saved Meals</h3>
-                  {savedMeals.length === 0 ? (
-                    <p style={{ color: '#999', fontSize: '0.9rem' }}>No saved meals yet. Create some in the Meals tab!</p>
-                  ) : (
-                    <div className="quick-add-list">
-                      {savedMeals.slice(0, 5).map(meal => (
-                        <button
-                          key={meal.id}
-                          className="quick-add-btn"
-                          onClick={() => handleLogMeal(meal)}
-                        >
-                          <Plus size={16} />
-                          {meal.name} ({meal.calories} kcal)
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Today's Log */}
-              <div className="section">
-                <h2>Today's Log</h2>
-                <div className="food-list">
-                  {logEntries.length === 0 ? (
-                    <div className="empty-state">
-                      <Flame size={48} />
-                      <p>No entries yet.</p>
-                      <p style={{ fontSize: '0.9rem', marginTop: '10px' }}>Start tracking your meals!</p>
-                    </div>
-                  ) : (
-                    logEntries.map(entry => (
-                      <div key={entry.id} className="food-item">
-                        <div className="food-info">
-                          <h3>
-                            {entry.name}
-                            {entry.type === 'meal' && <span className="badge-meal">Meal</span>}
-                          </h3>
-                          <div className="food-details">
-                            <span><strong>{entry.calories}</strong> kcal</span>
-                            {entry.protein > 0 && <span>P: {entry.protein}g</span>}
-                            {entry.carbs > 0 && <span>C: {entry.carbs}g</span>}
-                            {entry.fat > 0 && <span>F: {entry.fat}g</span>}
-                            <span className="time-badge">{formatTime(entry.timestamp)}</span>
-                          </div>
-                        </div>
-                        <div className="food-actions">
-                          <button 
-                            className="btn btn-danger"
-                            onClick={() => handleDeleteLogEntry(entry.id)}
-                          >
-                            <Trash2 size={16} />
-                          </button>
+              ) : (
+                <div className="log-by-date">
+                  {groupEntriesByDate().map(([dateKey, dateData]) => (
+                    <div key={dateKey} className="date-group">
+                      <div className="date-header">
+                        <h3>{formatDate(dateKey)}</h3>
+                        <div className="date-totals">
+                          <span className="total-calories">{dateData.totals.calories} kcal</span>
+                          <span>P: {dateData.totals.protein}g</span>
+                          <span>C: {dateData.totals.carbs}g</span>
+                          <span>F: {dateData.totals.fat}g</span>
+                          {dateData.totals.fiber > 0 && <span>Fiber: {dateData.totals.fiber}g</span>}
                         </div>
                       </div>
-                    ))
-                  )}
+                      
+                      <div className="date-entries">
+                        <table className="entries-table">
+                          <thead>
+                            <tr>
+                              <th>Time</th>
+                              <th>Food</th>
+                              <th>Calories</th>
+                              <th>Protein</th>
+                              <th>Carbs</th>
+                              <th>Fat</th>
+                              <th>Fiber</th>
+                              <th></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dateData.entries.map(entry => (
+                              <tr key={entry.id}>
+                                <td className="time-cell">{formatTime(entry.timestamp)}</td>
+                                <td className="name-cell">
+                                  {entry.name}
+                                  {entry.type === 'meal' && <span className="badge-meal-small">Meal</span>}
+                                </td>
+                                <td><strong>{entry.calories}</strong></td>
+                                <td>{entry.protein}g</td>
+                                <td>{entry.carbs}g</td>
+                                <td>{entry.fat}g</td>
+                                <td>{entry.fiber || 0}g</td>
+                                <td>
+                                  <button 
+                                    className="btn-icon-delete"
+                                    onClick={() => handleDeleteLogEntry(entry.id)}
+                                    title="Delete entry"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
+              )}
             </div>
           </>
         )}
