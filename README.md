@@ -2,6 +2,8 @@
 
 A modern, beautiful web application for tracking your daily macros and nutrition with a comprehensive food database and meal builder.
 
+Check live at [https://mauricioize.dev/macro-tracker/](https://mauricioize.dev/macro-tracker/).
+
 ## Features
 
 ### 🔥 Tracker Tab
